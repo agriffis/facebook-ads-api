@@ -475,19 +475,14 @@ class AdsAPI(object):
             args['end_time'] = end_time
         return self.make_request(path, 'POST', args, batch=batch)
 
-    def create_adcreative_type_27(self, account_id, object_id,
+    def create_adcreative_type_27(self, account_id, object_id, body=None,
                                   auto_update=None, story_id=None,
                                   url_tags=None, name=None, batch=False):
         """Creates an ad creative in the given ad account."""
         path = 'act_%s/adcreatives' % account_id
         args = {
-            'type': 27,
-            'object_id': object_id,
+            'object_story_id': object_id,    # NEW AD CREATIVE MIGRATION
         }
-        if auto_update:
-            args['auto_update'] = auto_update
-        if story_id:
-            args['story_id'] = story_id
         if url_tags:
             args['url_tags'] = url_tags
         if name:
