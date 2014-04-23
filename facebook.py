@@ -7,9 +7,11 @@ import json
 import logging
 import mimetypes
 import sys
-import urllib
-import urllib2
+import requests
+#import urllib2
 import uuid
+
+from urlobject import URLObject as URL
 
 FACEBOOK_API = 'https://graph.facebook.com'
 
@@ -73,10 +75,14 @@ class AdsAPIError(Exception):
     https://developers.facebook.com/docs/reference/ads-api/error-reference/
     """
     def __init__(self, error):
-        data = json.load(error)
+        #data = json.load(error)
+        data = error
+        logger.error("AdsAPIError: %s" % error)
         self.message = data['error']['message']
         self.code = data['error']['code']
         self.type = data['error']['type']
+    def __str__(self):
+        return "Code %s (%s): %s" % (self.code, self.type, self.message)
 
 
 class AdsAPI(object):
@@ -94,32 +100,27 @@ class AdsAPI(object):
             # Then just return a dict for the batch request
             return {
                 'method': method,
-                'relative_url': '%s?%s' % (path, urllib.urlencode(args))
+                'relative_url': URL(path).set_query_params(args),
             }
         logger.info('Making a %s request at %s with %s' % (method, path, args))
         if 'access_token' not in args:
             args['access_token'] = self.access_token
         try:
+            logger.debug("About to perform request: Method = %r, path = %r, args = %r" % (method,path,args))
+            url = URL(FACEBOOK_API).relative(path)
             if method == 'GET':
-                url = '%s/%s?%s' % (FACEBOOK_API, path, urllib.urlencode(args))
-                f = urllib2.urlopen(url)
+                req = requests.get(url.set_query_params(args))
             elif method == 'POST':
-                url = '%s/%s' % (FACEBOOK_API, path)
-                if files:
-                    encoder = MultipartFormdataEncoder()
-                    content_type, body = encoder.encode(args, files)
-                    req = urllib2.Request(url, data=body)
-                    req.add_header('Content-Type', content_type)
-                    f = urllib2.urlopen(req)
-                else:
-                    f = urllib2.urlopen(url, urllib.urlencode(args))
+                req = requests.post(url, data=args, files=files)
+            elif method == 'DELETE':
+                req = requests.delete(url.set_query_params(args))
             else:
                 raise
-            return json.load(f)
-        except urllib2.HTTPError as e:
+            return req.json()
+        except Exception as e:
+            #raise #if you don't want AdsAPIError in the way
             raise AdsAPIError(e)
-        except urllib2.URLError as e:
-            print 'URLError: %s' % e.reason
+
 
     def make_batch_request(self, batch):
         """Makes a batched request against the Facebook Ads API endpoint."""
@@ -128,8 +129,10 @@ class AdsAPI(object):
         args['batch'] = json.dumps(batch)
         logger.info('Making a batched request with %s' % args)
         try:
-            f = urllib2.urlopen(FACEBOOK_API, urllib.urlencode(args))
-            data = json.load(f)
+            #f = urllib2.urlopen(FACEBOOK_API, urllib.urlencode(args))
+            req = requests.post(FACEBOOK_API, data=args)
+            #data = json.load(f)
+            data = req.json()
             for idx, val in enumerate(data):
                 # Workaround code for facebook api server error
                 if val['code'] == 500:
@@ -137,11 +140,13 @@ class AdsAPI(object):
                     val['body'] = '{"error": {"code": 1, "message": "An unknown error occurred", "type": "UnknownError"}}'
                 data[idx] = json.loads(val['body'])
             return data
-        except urllib2.HTTPError as e:
-            print 'HTTPError: %s' % e.code
-            return json.load(e)
-        except urllib2.URLError as e:
-            print 'URLError: %s' % e.reason
+        # except urllib2.HTTPError as e:
+        #     print 'HTTPError: %s' % e.code
+        #     return json.load(e)
+        # except urllib2.URLError as e:
+        #     print 'URLError: %s' % e.reason
+        except Exception as e:
+            raise AdsAPIError(e)
 
     def debug_token(self, token):
         """Returns debug information about the given token."""
