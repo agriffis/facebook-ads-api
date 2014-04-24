@@ -1,0 +1,2 @@
+requests==2.2.1
+URLObject==2.3.4

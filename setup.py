@@ -27,4 +27,8 @@ setup(
     description='Python client for the Facebook Ads API',
     long_description=open('README.md').read(),
     cmdclass={'test': TestCommand},
+    install_requires=[
+        'requests>=2.2.1',
+        'URLObject>=2.3.4',
+    ],
 )
