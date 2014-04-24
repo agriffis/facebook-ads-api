@@ -1,14 +1,9 @@
-import codecs
 import datetime
 import hashlib
 import hmac
-import io
 import json
 import logging
-import mimetypes
-import sys
 import requests
-import uuid
 
 from urlobject import URLObject as URL
 
