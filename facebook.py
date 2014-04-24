@@ -100,7 +100,8 @@ class AdsAPI(object):
     # New API
     def make_labeled_batch_request(self, batch):
         """Makes a batched request with label against the Facebook Ads API endpoint."""
-        labels, queries = batch.items()
+        labels = batch.keys()
+        queries = batch.values()
         data = self.make_batch_request(queries)
         return batch.__class__(zip(labels, data))
 
