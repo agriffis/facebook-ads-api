@@ -1,10 +1,13 @@
 import datetime
 import hashlib
 import hmac
+import imghdr
 import json
 import logging
+import mimetypes
+import os
 import requests
-
+from requests.utils import guess_filename
 from urlobject import URLObject as URL
 
 FACEBOOK_API = 'https://graph.facebook.com'
@@ -27,6 +30,51 @@ class AdsAPIError(Exception):
         return "AdsAPIError %s (%s): %s" % (self.code, self.type, self.message)
 
 
+def file_tuple(f, default_name=None, image=True):
+    """
+    Returns a tuple suitable for requests file upload, particularly to enable
+    Facebook APIs that require the content-type to be set.
+    """
+    # Same variable names as in RequestEncodingMixin._encode_files().
+    fn, fp, ft, fh = None, None, None, None
+
+    if isinstance(f, (tuple, list)):
+        # Assign as many as provided.
+        try:
+            fn = f[0]
+            fp = f[1]
+            ft = f[2]
+            fh = f[3]
+        except IndexError:
+            pass
+    else:
+        # As in requests, bare value is file pointer or content.
+        fp = f
+
+    if not fn:
+        fn = guess_filename(fp) or default_name
+
+    # Try to get content-type from filename first.
+    if not ft and fn:
+        ext = os.path.splitext(fn)[1].lower()
+        ft = mimetypes.types_map.get(ext)
+
+    # Fall back to detecting the image type from the header.
+    if not ft and image:
+        ext = None
+        if isinstance(fp, basestring):
+            ext = imghdr.what(None, fp[:32])
+        elif callable(getattr(fp, 'seek', None)):
+            try:
+                ext = imghdr.what(fp)
+            except IOError:  # unseekable file
+                pass
+        if ext:
+            ft = mimetypes.types_map.get(ext)
+
+    return fn, fp, ft, fh
+
+
 class AdsAPI(object):
     """A client for the Facebook Ads API."""
     DATA_LIMIT = 100
@@ -47,8 +95,12 @@ class AdsAPI(object):
                 'relative_url': URL(path).set_query_params(args),
             }
 
-        args.setdefault('access_token', self.access_token)
         url = URL(FACEBOOK_API).relative(path)
+
+        args.setdefault('access_token', self.access_token)
+
+        if files and callable(getattr(files, 'items', None)):
+            files = files.__class__((k, file_tuple(v, k)) for k, v in files.items())
 
         logger.debug('Making a %r request at %r with %r', method, url, args)
         if method == 'GET':
